@@ -1,4 +1,5 @@
-#include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/u8g2
+
+#include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 #include <SparkFun_ADXL345.h>         // SparkFun ADXL345 Library   from https://github.com/sparkfun/SparkFun_ADXL345_Arduino_Library
 
 int action = 0;
@@ -8,6 +9,7 @@ const int buttonPin = 2;              // the input pin number of the pushbutton
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
 
+
 //----------------------------------------------------------------------------------------------------------------------------------
 ADXL345 adxl = ADXL345();                         // USE ADXL345 I2C COMMUNICATION
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -16,7 +18,7 @@ double read_angle() {                             // Function returning the curr
   int x, y, z;
   double l_angle = 0;
   double ll_angle = 0;
-  int mm = 250;
+  int mm = 1500;
 
   for (int nn = 1;  nn <= mm; nn++) {               // Average value computed over roughly 100ms
     adxl.readAccel(&x, &y, &z);                     // Read the accelerometer values and store them in variables declared above x,y,z
@@ -29,26 +31,29 @@ double read_angle() {                             // Function returning the curr
 void init_angle() {
   //----------------------------------------------------------------------------------------------------------------------------------
   double ra = 0;
-  delay(500);
+  delay(200);
   ra = read_angle();
-  delay(500);
+  delay(200);
   ra = read_angle();                      // Initialize the actual angle as the reference angle
   ref_angle = ra;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
 void setup() {
   //----------------------------------------------------------------------------------------------------------------------------------
+  delay(500);
   corde = 25;                                     // Chord width value
   Serial.begin(9600);
-  // Serial.println("Init done");
+ //Serial.println("Init done");
   u8g2.begin();                                   // Start Oled
   affiche_init();
   adxl.powerOn();                                 // Power on the ADXL345
   adxl.setSpiBit(0);                              // Configure the device to be in 4 wire SPI mode when set to '0' or 3 wire SPI mode when set to 1
   adxl.setRangeSetting(2);                        // Give the range settings
-  pinMode(buttonPin, INPUT);                      // define the Push Button input
+  
+  pinMode(buttonPin, INPUT_PULLUP);                      // define the Push Button input
   init_angle();
   ref_angle = ref_angle - 0.2;
+  // Serial.println("fin init");
 }
 //----------------------------------------------------------------------------------------------------------------------------------
 String cnv_flt2str(float num, int car, int digit) { // Convert a float variable into a string with a specific number of digits
@@ -119,8 +124,8 @@ void aff_menu() {
       u8g2.setCursor(64 + 63 - 14, 30);
       u8g2.print("10");
       u8g2.drawLine(l_pas, 18, l_pas, 34);
-      u8g2.drawLine(l_pas-1, 18, l_pas-1, 20);
-      u8g2.drawLine(l_pas+1, 18, l_pas+1, 20);
+      u8g2.drawLine(l_pas - 1, 18, l_pas - 1, 20);
+      u8g2.drawLine(l_pas + 1, 18, l_pas + 1, 20);
     } while ( u8g2.nextPage() );
 
     l_ang = read_angle() - l_ref;                                             // read current angle
@@ -154,7 +159,7 @@ void aff_menu() {
     }
 
     l_pas = 64 + l_posi;
-    // Serial.println("angle :" + String(l_ang) + " posi "+ String(l_posi) + " pas " + String(l_pas));
+    //Serial.println("angle :" + String(l_ang) + " posi "+ String(l_posi) + " pas " + String(l_pas));
     delay(200);
   } while (not( bp_pushed()));
   while (bp_pushed()) {
@@ -201,14 +206,15 @@ void loop() {                                     // Main loop
   int act = 0;
 
   if (bp_pushed()) action = 1;
-
+ //Serial.println("action :" + String(action));
   switch (action) {
     case (1):
+   // Serial.println("case 1");
       aff_menu();
       action = 2;
       break;
     case (2):
-      affiche_init();
+    //Serial.println("case 2");  affiche_init();
       init_angle();
       action = 0;
       break;
@@ -218,6 +224,7 @@ void loop() {                                     // Main loop
   x_rot = read_angle();                                               // read current angle
   x_rot = ref_angle - x_rot;                                          // compute angle variation vs. reference angle
   angle = (x_rot / 180) * pi;                                         // angle value converted into radian
+ //Serial.println("angle :" + String(angle));
   debat = sqrt(2 * sq(corde) - (2 * sq(corde) * cos(angle)));         // throw computation in same units as chord
   affiche(cnv_flt2str(x_rot, 6, 1), cnv_flt2str(corde, 4, 1), cnv_flt2str(debat, 6, 1));
 }
