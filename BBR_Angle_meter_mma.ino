@@ -12,7 +12,7 @@
 #include <Wire.h>
 #include <Adafruit_MMA8451.h>         // MMA8451 library            from https://github.com/adafruit/Adafruit_MMA8451_Library
 #include <Adafruit_Sensor.h>          // comes with the above
-#include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/u8g2
+#include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 
 int action = 0;
 double corde,  ref_angle;
