@@ -11,7 +11,7 @@
 
 #include <Wire.h>
 #include <Adafruit_MMA8451.h>         // MMA8451 library            from https://github.com/adafruit/Adafruit_MMA8451_Library
-#include <Adafruit_Sensor.h>          // comes with the above
+#include <Adafruit_Sensor.h>          // Adafruit sensors library   from https://github.com/adafruit/Adafruit_Sensor
 #include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 
 int action = 0;
