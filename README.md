@@ -14,4 +14,5 @@ This is still an ongoing project.... even if it is up and running some tweaking 
 
 Have fun
 
-Ces projets ont été créés et codés selon la méthode R.A.C.H.E de l’International Institute of La RACHE pour plus d'informations sur cette méthode scientifique veuillez visiter: https://www.la-rache.com/
+Ces projets ont été créés et codés selon la méthode R.A.C.H.E de l’International Institute of La RACHE
+pour plus d'informations sur cette méthode scientifique veuillez visiter: https://www.la-rache.com/
