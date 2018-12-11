@@ -1,4 +1,10 @@
 /*
+  
+   Copyright J'm f5mmx, France, 2018 (jmb91650@gmail.com)
+   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
+   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
    --------------------------------------------------
    Uses nearly the same schematic designed around the
    ADXL345. On AXL345 CS input is tight to +3V on
