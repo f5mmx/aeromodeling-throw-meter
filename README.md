@@ -12,6 +12,8 @@ This is still an ongoing project.... even if it is up and running some tweaking 
 >>the MMA version runs the same way as the version based on the ADXL345 but it adds accuracy 
 >>also the push button is now sensed using an interrupt
 
+This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
+
 Have fun
 
 Ces projets ont été créés et codés selon la méthode R.A.C.H.E de l’International Institute of La RACHE
