@@ -1,9 +1,4 @@
 /*
-     Copyright J'm f5mmx, France, 2018 (jmb91650@gmail.com)
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   
    --------------------------------------------------
    the MMA8451 version.
    Have fun!
@@ -50,13 +45,12 @@ Adafruit_MMA8451 mma = Adafruit_MMA8451();
 //----------------------------------------------------------------------------------------------------------------------------------
 double read_angle() {                             // Function returning the current rotation value along X axis - in degrees
   //----------------------------------------------------------------------------------------------------------------------------------
-  int x, y, z;
   double l_angle = 0;
   double ll_angle = 0;
-  int mm = 50;
+  int mm = 100;
   for (int nn = 1;  nn <= mm; nn++) {               // Average value computed over roughly 100ms
     mma.read();                                     // Read the accelerometer values and store them in variables declared above x,y,z
-    l_angle = atan2(mma.y, mma.z) * 57.3;           // Compute rotation angle along X axis of accelerometer
+    l_angle = atan2(mma.y, mma.z) * 180/pi;         // Compute rotation angle along X axis of accelerometer
     ll_angle = ll_angle + (l_angle);
   }
   l_angle = round(ll_angle / mm * 10);
