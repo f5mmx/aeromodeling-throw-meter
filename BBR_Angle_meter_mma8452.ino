@@ -1,10 +1,4 @@
 /*
-  
-   Copyright J'm f5mmx, France, 2018 (jmb91650@gmail.com)
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  
    --------------------------------------------------
    Uses nearly the same schematic designed around the
    ADXL345. On AXL345 CS input is tight to +3V on
@@ -59,7 +53,7 @@ void init_angle() {
 //----------------------------------------------------------------------------------------------------------------------------------
 void setup() {
   //----------------------------------------------------------------------------------------------------------------------------------
-  delay(1000);                                    // Need some time to boot up I2C components
+  delay(500);
   corde = 50;                                     // Chord width value
   Wire.begin();
   Serial.begin(9600);
@@ -104,22 +98,11 @@ void ISRbutton()  {
 //----------------------------------------------------------------------------------------------------------------------------------
 String cnv_flt2str(float num, int car, int digit) { // Convert a float variable into a string with a specific number of digits
   //----------------------------------------------------------------------------------------------------------------------------------
-  float tmp_num, expo;
   String str = "";
-  switch (digit) {
-    case 0: expo = 1; break;
-    case 1: expo = 10; break;
-    case 2: expo = 100; break;
-    case 3: expo = 1000; break;
-    case 4: expo = 10000; break;
-    default: expo = 0; break;
-  }
-  if (expo != 0) {
+  if (digit > 0) {
+    str = String(num, digit);
+  } else {
     str = String(int(num));
-    if (expo > 1)  {
-      tmp_num = abs(num) - int(abs(num));
-      str = str + "." + String(int(tmp_num * expo));
-    }
   }
   while (str.length() < car) {
     str = " " + str;
@@ -285,9 +268,9 @@ void loop() {                                     // Main loop
   }
   x_rot = read_angle();                                               // read current angle
   x_rot = ref_angle - x_rot;                                          // compute angle variation vs. reference angle
-  angle = x_rot/180*pi;                                         // angle value converted from radian
+  angle = x_rot / 180 * pi;                                     // angle value converted from radian
   //Serial.println("angle :" + String(angle, 1));
-  
+
   debat = sqrt(2 * sq(corde) - (2 * sq(corde) * cos(angle)));         // throw computation in same units as chord
   affiche(cnv_flt2str(x_rot, 6, 1), cnv_flt2str(corde, 4, 1), cnv_flt2str(debat, 6, 1));
 }
