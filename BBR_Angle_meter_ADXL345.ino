@@ -1,16 +1,10 @@
-/*  
-   Copyright J'm f5mmx, France, 2018 (jmb91650@gmail.com)
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-*/
 
 #include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 #include <SparkFun_ADXL345.h>         // SparkFun ADXL345 Library   from https://github.com/sparkfun/SparkFun_ADXL345_Arduino_Library
 
 int action = 0;
 double corde,  ref_angle;
-const float pi = 3.1415926539;        // PI definition.... could have been a standard value....
+const float pi = 3.1415926539;        // PI definition....
 const int buttonPin = 2;              // the input pin number of the pushbutton
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
@@ -24,22 +18,22 @@ double read_angle() {                             // Function returning the curr
   int x, y, z;
   double l_angle = 0;
   double ll_angle = 0;
-  int mm = 1500;
+  int mm = 250;
 
   for (int nn = 1;  nn <= mm; nn++) {               // Average value computed over roughly 100ms
     adxl.readAccel(&x, &y, &z);                     // Read the accelerometer values and store them in variables declared above x,y,z
     l_angle = atan2(y, z) * 57.3;                 // Compute rotation angle along X axis of ADXL345
     ll_angle = ll_angle + (l_angle);
   }
-  return ll_angle / mm;
+  return -ll_angle / mm;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
 void init_angle() {
   //----------------------------------------------------------------------------------------------------------------------------------
   double ra = 0;
-  delay(200);
+  delay(100);
   ra = read_angle();
-  delay(200);
+  delay(100);
   ra = read_angle();                      // Initialize the actual angle as the reference angle
   ref_angle = ra;
 }
@@ -47,7 +41,7 @@ void init_angle() {
 void setup() {
   //----------------------------------------------------------------------------------------------------------------------------------
   delay(500);
-  corde = 25;                                     // Chord width value
+  corde = 50;                                     // Chord width value
   Serial.begin(9600);
  //Serial.println("Init done");
   u8g2.begin();                                   // Start Oled
@@ -64,22 +58,11 @@ void setup() {
 //----------------------------------------------------------------------------------------------------------------------------------
 String cnv_flt2str(float num, int car, int digit) { // Convert a float variable into a string with a specific number of digits
   //----------------------------------------------------------------------------------------------------------------------------------
-  float tmp_num, expo;
   String str = "";
-  switch (digit) {
-    case 0: expo = 1; break;
-    case 1: expo = 10; break;
-    case 2: expo = 100; break;
-    case 3: expo = 1000; break;
-    case 4: expo = 10000; break;
-    default: expo = 0; break;
-  }
-  if (expo != 0) {
+  if (digit > 0) {
+    str = String(num, digit);
+  } else {
     str = String(int(num));
-    if (expo > 1)  {
-      tmp_num = abs(num) - int(abs(num));
-      str = str + "." + String(int(tmp_num * expo));
-    }
   }
   while (str.length() < car) {
     str = " " + str;
@@ -217,10 +200,13 @@ void loop() {                                     // Main loop
     case (1):
    // Serial.println("case 1");
       aff_menu();
-      action = 2;
+      affiche_init();
+      init_angle();
+      action = 0;
       break;
     case (2):
     //Serial.println("case 2");  affiche_init();
+      affiche_init();
       init_angle();
       action = 0;
       break;
