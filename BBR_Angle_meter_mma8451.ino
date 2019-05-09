@@ -1,10 +1,10 @@
 /*
-  
+
    Copyright J'm f5mmx, France, 2018 (jmb91650@gmail.com)
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  
+
    --------------------------------------------------
    the MMA8451 version.
    Have fun!
@@ -43,6 +43,7 @@ boolean lastStatePB_INIT = HIGH;
 boolean triggerPB_INIT = 0;
 boolean buttonStatePB_INIT = HIGH;
 boolean readingPB_INIT = HIGH;
+int maxx = -10000, minx = 10000, maxy = -10000, miny = 10000, maxz = -10000, minz = 10000;
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
 
@@ -56,7 +57,17 @@ double read_angle() {                             // Function returning the curr
   int mm = 100;
   for (int nn = 1;  nn <= mm; nn++) {               // Average value computed over roughly 100ms
     mma.read();                                     // Read the accelerometer values and store them in variables declared above x,y,z
-    l_angle = atan2(mma.y, mma.z) * 180/pi;         // Compute rotation angle along X axis of accelerometer
+    if (mma.x > maxx)  maxx = mma.x;
+    if (mma.x < minx)  minx = mma.x;
+
+    if (mma.y > maxy)  maxy = mma.y;
+    if (mma.y < miny)  miny = mma.y;
+
+    if (mma.z > maxz)  maxz = mma.z;
+    if (mma.z < minz)  minz = mma.z;
+ //   Serial.println("min z: " + String(minz) + " - max z:" + String( maxz));
+    
+    l_angle = atan2(mma.y, mma.z) * 180 / pi;       // Compute rotation angle along X axis of accelerometer
     ll_angle = ll_angle + (l_angle);
   }
   l_angle = round(ll_angle / mm * 10);
@@ -137,7 +148,7 @@ String cnv_flt2str(float num, int car, int digit) { // Convert a float variable 
     default: expo = 0; break;
   }
   if (expo != 0) {
-    str = String(int(num));
+    str = String(num,0);
     if (expo > 1)  {
       tmp_num = abs(num) - int(abs(num));
       str = str + "." + String(int(tmp_num * expo));
@@ -314,6 +325,7 @@ void loop() {                                     // Main loop
   x_rot = ref_angle - x_rot;                                          // compute angle variation vs. reference angle
   angle = (x_rot / 180) * pi;                                         // angle value converted into radian
   // Serial.println("angle :" + String(angle));
-  debat = sqrt(2 * sq(corde) - (2 * sq(corde) * cos(angle)));         // throw computation in same units as chord
+  //debat = sqrt(2 * sq(corde) - (2 * sq(corde) * cos(angle)));         // throw computation in same units as chord
+  debat = corde * sin(angle);                                         // throw computation in same units as chord
   affiche(cnv_flt2str(x_rot, 6, 1), cnv_flt2str(corde, 4, 1), cnv_flt2str(debat, 6, 1));
 }
