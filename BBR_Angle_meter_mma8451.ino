@@ -65,8 +65,8 @@ double read_angle() {                             // Function returning the curr
 
     if (mma.z > maxz)  maxz = mma.z;
     if (mma.z < minz)  minz = mma.z;
- //   Serial.println("min z: " + String(minz) + " - max z:" + String( maxz));
-    
+    //   Serial.println("min z: " + String(minz) + " - max z:" + String( maxz));
+
     l_angle = atan2(mma.y, mma.z) * 180 / pi;       // Compute rotation angle along X axis of accelerometer
     ll_angle = ll_angle + (l_angle);
   }
@@ -137,28 +137,18 @@ void lecture_bp() { // Push button read function with debouncing and long push d
 //----------------------------------------------------------------------------------------------------------------------------------
 String cnv_flt2str(float num, int car, int digit) { // Convert a float variable into a string with a specific number of digits
   //----------------------------------------------------------------------------------------------------------------------------------
-  float tmp_num, expo;
   String str = "";
-  switch (digit) {
-    case 0: expo = 1; break;
-    case 1: expo = 10; break;
-    case 2: expo = 100; break;
-    case 3: expo = 1000; break;
-    case 4: expo = 10000; break;
-    default: expo = 0; break;
-  }
-  if (expo != 0) {
-    str = String(num,0);
-    if (expo > 1)  {
-      tmp_num = abs(num) - int(abs(num));
-      str = str + "." + String(int(tmp_num * expo));
-    }
+  if (digit > 0) {
+    str = String(num, digit);
+  } else {
+    str = String(int(num));
   }
   while (str.length() < car) {
     str = " " + str;
   }
   return str;
 }
+
 //----------------------------------------------------------------------------------------------------------------------------------
 void aff_menu() {
   //----------------------------------------------------------------------------------------------------------------------------------
