@@ -7,8 +7,16 @@
    an interrupt
    Have fun!
    --------------------------------------------------
-*/
+   Copyright J'm f5mmx, France, 2019 (jmb91650@gmail.com)
+   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
+   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+   --------------------------------------------------
+   the MMA8452 version.
+   Have fun!
+   --------------------------------------------------
+*/
 #include <Wire.h>
 #include <MMA8452.h>                  // MMA8452 library            from https://github.com/akupila/Arduino-MMA8452
 #include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
