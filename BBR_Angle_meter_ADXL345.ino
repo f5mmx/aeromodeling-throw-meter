@@ -1,4 +1,15 @@
+/*
+   --------------------------------------------------
+   Copyright J'm f5mmx, France, 2019 (jmb91650@gmail.com)
+   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
+   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+   --------------------------------------------------
+   the ADXL345 version.
+   Have fun!
+   --------------------------------------------------
+*/
 #include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 #include <SparkFun_ADXL345.h>         // SparkFun ADXL345 Library   from https://github.com/sparkfun/SparkFun_ADXL345_Arduino_Library
 
