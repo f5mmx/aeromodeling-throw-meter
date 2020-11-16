@@ -1,6 +1,6 @@
 /*
 
-   Copyright J'm f5mmx, France, 2019 (jmb91650@gmail.com)
+   Copyright J'm f5mmx, France, 2018 (jmb91650@gmail.com)
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -9,15 +9,19 @@
    the MMA8451 version.
    Have fun!
    --------------------------------------------------
+   V1.1 November 2020 => Added running median filtering to smooth out the display thank you Rob!
+   --------------------------------------------------
 */
 
 #include <Wire.h>
 #include <Adafruit_MMA8451.h>         // MMA8451 library            from https://github.com/adafruit/Adafruit_MMA8451_Library
 #include <Adafruit_Sensor.h>          // Adafruit sensors library   from https://github.com/adafruit/Adafruit_Sensor
 #include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
+#include "RunningMedian.h"            // By Ron Tillaart            from https://github.com/RobTillaart/Arduino/tree/master/libraries/RunningMedian
+
 #define DELAY_DEBOUNCE 10             // Debounce delay for Push Button
 #define DELAY_START_INIT 1000         // delay to start calibration when PB is pressed
-
+RunningMedian R_Angle = RunningMedian(19);
 const String Txt1 = "Erreur MMA";     // MMA sensor didn't start error string
 // Menu text
 const String Txt2 = "Corde : ";       // Chord
@@ -54,24 +58,23 @@ double read_angle() {                             // Function returning the curr
   //----------------------------------------------------------------------------------------------------------------------------------
   double l_angle = 0;
   double ll_angle = 0;
-  int mm = 100;
-  for (int nn = 1;  nn <= mm; nn++) {               // Average value computed over roughly 100ms
-    mma.read();                                     // Read the accelerometer values and store them in variables declared above x,y,z
-    if (mma.x > maxx)  maxx = mma.x;
-    if (mma.x < minx)  minx = mma.x;
 
-    if (mma.y > maxy)  maxy = mma.y;
-    if (mma.y < miny)  miny = mma.y;
+  int mm = 19, mmm = 5;
 
-    if (mma.z > maxz)  maxz = mma.z;
-    if (mma.z < minz)  minz = mma.z;
-    //   Serial.println("min z: " + String(minz) + " - max z:" + String( maxz));
+  for (int nnn = 1;  nnn <= mmm; nnn++) {             // Average value computed over roughly 100ms
+    for (int nn = 1;  nn <= mm; nn++) {               // Running median fill running median
+      mma.read();                                     // Read the accelerometer values and store them in variables declared above x,y,z
+      //   Serial.println("min z: " + String(minz) + " - max z:" + String( maxz));
+      l_angle = atan2(mma.y, mma.z) * 180 / pi;       // Compute rotation angle along X axis of accelerometer
 
-    l_angle = atan2(mma.y, mma.z) * 180 / pi;       // Compute rotation angle along X axis of accelerometer
-    ll_angle = ll_angle + (l_angle);
+      R_Angle.add(l_angle);                           // Add value in running median table
+    }
+    ll_angle = ll_angle + R_Angle.getMedian();
   }
-  l_angle = round(ll_angle / mm * 10);
+
+  l_angle = round(ll_angle / mmm * 10);
   ll_angle = l_angle / 10;
+
   return -ll_angle;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -79,6 +82,7 @@ void init_angle() {
   //----------------------------------------------------------------------------------------------------------------------------------
   double ra = 0;
   delay(200);
+  R_Angle.clear();
   ra = read_angle();                              // Initialize the actual angle as the reference angle
   ref_angle = ra;
 }
@@ -86,7 +90,7 @@ void init_angle() {
 void setup() {
   //----------------------------------------------------------------------------------------------------------------------------------
   delay(500);
-  corde = 50;                                     // Chord width value
+  corde = 68;                                     // Chord width value
   Serial.begin(9600);
   //  Serial.println("Init done");
   u8g2.begin();                                   // Start Oled
