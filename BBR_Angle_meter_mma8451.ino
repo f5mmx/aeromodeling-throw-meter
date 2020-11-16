@@ -315,11 +315,16 @@ void loop() {                                     // Main loop
     default:
       break;
   }
-  x_rot = read_angle();                                               // read current angle
-  x_rot = ref_angle - x_rot;                                          // compute angle variation vs. reference angle
+  x_rot = read_angle();                                                 // read current angle
+  x_rot = fmod((ref_angle - x_rot) + 180, 360);                         // compute angle variation vs. reference angle
+  if (x_rot < 0) {
+    x_rot += 180;
+  } else {
+    x_rot -= 180;
+  }
+
   angle = (x_rot / 180) * pi;                                         // angle value converted into radian
   // Serial.println("angle :" + String(angle));
-  //debat = sqrt(2 * sq(corde) - (2 * sq(corde) * cos(angle)));         // throw computation in same units as chord
   debat = corde * sin(angle);                                         // throw computation in same units as chord
   affiche(cnv_flt2str(x_rot, 6, 1), cnv_flt2str(corde, 4, 1), cnv_flt2str(debat, 6, 1));
 }
