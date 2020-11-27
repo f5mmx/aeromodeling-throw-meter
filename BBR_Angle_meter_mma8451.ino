@@ -9,7 +9,8 @@
    the MMA8451 version.
    Have fun!
    --------------------------------------------------
-   V1.1 November 2020 => Added running median filtering to smooth out the display thank you Rob!
+   V1.1 November 2020 => Added running median filtering to smooth out the display thank you Ron!
+   V1.2 November 2020 => Added Moving average filtering
    --------------------------------------------------
 */
 
@@ -18,10 +19,13 @@
 #include <Adafruit_Sensor.h>          // Adafruit sensors library   from https://github.com/adafruit/Adafruit_Sensor
 #include <U8g2lib.h>                  // Oled U8g2 library          from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 #include "RunningMedian.h"            // By Ron Tillaart            from https://github.com/RobTillaart/Arduino/tree/master/libraries/RunningMedian
+#include <movingAvg.h>                // By J Christensen           from https://github.com/JChristensen/movingAvg
 
 #define DELAY_DEBOUNCE 10             // Debounce delay for Push Button
 #define DELAY_START_INIT 1000         // delay to start calibration when PB is pressed
-RunningMedian R_Angle = RunningMedian(19);
+RunningMedian R_Angle = RunningMedian(55);
+movingAvg ll_angle(25);
+
 const String Txt1 = "Erreur MMA";     // MMA sensor didn't start error string
 // Menu text
 const String Txt2 = "Corde : ";       // Chord
@@ -57,9 +61,9 @@ Adafruit_MMA8451 mma = Adafruit_MMA8451();
 double read_angle() {                             // Function returning the current rotation value along X axis - in degrees
   //----------------------------------------------------------------------------------------------------------------------------------
   double l_angle = 0;
-  double ll_angle = 0;
+  double lll_angle = 0;
 
-  int mm = 19, mmm = 5;
+  int mm = 21 * 3, mmm = 3;
 
   for (int nnn = 1;  nnn <= mmm; nnn++) {             // Average value computed over roughly 100ms
     for (int nn = 1;  nn <= mm; nn++) {               // Running median fill running median
@@ -69,13 +73,12 @@ double read_angle() {                             // Function returning the curr
 
       R_Angle.add(l_angle);                           // Add value in running median table
     }
-    ll_angle = ll_angle + R_Angle.getMedian();
+    lll_angle = ll_angle.reading(R_Angle.getMedian() * 100); //Add value in Moving average object
   }
+  l_angle = round(lll_angle / 10);
+  lll_angle = l_angle / 10;
 
-  l_angle = round(ll_angle / mmm * 10);
-  ll_angle = l_angle / 10;
-
-  return -ll_angle;
+  return -lll_angle;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
 void init_angle() {
@@ -83,19 +86,22 @@ void init_angle() {
   double ra = 0;
   delay(200);
   R_Angle.clear();
+  ll_angle.reset();
   ra = read_angle();                              // Initialize the actual angle as the reference angle
   ref_angle = ra;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
 void setup() {
   //----------------------------------------------------------------------------------------------------------------------------------
+  ll_angle.begin();
   delay(500);
   corde = 68;                                     // Chord width value
   Serial.begin(9600);
   //  Serial.println("Init done");
   u8g2.begin();                                   // Start Oled
-  affiche_init();
   delay(100);
+  affiche_init();
+  delay(300);
   if (! mma.begin()) {                            // Try to start MMA, if fails then display error message
     u8g2.firstPage();
     do {
