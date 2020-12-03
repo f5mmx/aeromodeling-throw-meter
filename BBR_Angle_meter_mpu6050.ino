@@ -1,6 +1,6 @@
 /*
 
-   Copyright J'm f5mmx, France, 2018 (jmb91650@gmail.com)
+   Copyright J'm f5mmx, France, 2020 (jmb91650@gmail.com)
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
