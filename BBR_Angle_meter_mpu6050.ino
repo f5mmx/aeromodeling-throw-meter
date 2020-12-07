@@ -12,38 +12,31 @@
    V1.0 Nov. 2020: initial release
    --------------------------------------------------
 */
-
 #include <MPU6050.h>                  // MPU6050 libray by Jarzebski from https://github.com/jarzebski/Arduino-MPU6050/archive/master.zip
 #include <U8g2lib.h>                  // Oled U8g2 library           from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 #include "RunningMedian.h"            // By Ron Tillaart             from https://github.com/RobTillaart/Arduino/tree/master/libraries/RunningMedian
 #include <movingAvg.h>                // By J Christensen            from https://github.com/JChristensen/movingAvg
 #define DELAY_DEBOUNCE 10             // Debounce delay for Push Button
 #define DELAY_START_INIT 1000         // delay to start calibration when PB is pressed 
+#define buttonPin 2                   // Push button wired on D2
 RunningMedian R_Angle = RunningMedian(5);
 movingAvg ll_angle(10);
 //----------------------------------------------------------------------------------------------------------------------------------
 // Menu text
-const String Txt1 = "Erreur MPU";     // MPU6050 sensor didn't start error string
-const String Txt2 = "Corde : ";       // Chord
-const String Txt3 = "INIT EN COURS";  // Initializing
-const String Txt4 = "Angle deg -->";  // Angle value
-const String Txt5 = "Corde ";         // Chord
-const String Txt6 = "Debat mm --->";  // Throw value milimiters
-int action = 0;
-bool app = false;
-float corde,  ref_angle;
-const float pi = M_PI;
-const int buttonPin = 2;
-volatile int bp_pushed = 0;
-volatile  unsigned long bp_down = 0 ;
-volatile  unsigned long bp_up = 0;
-volatile  unsigned long bp_ = 0;
-long lastDebounceTimePB_INIT = 0;
+const String Txt1  = "Erreur MPU";     // MPU6050 sensor didn't start error string
+const String Txt2  = "Corde : ";       // Chord
+const String Txt3  = "INIT EN COURS";  // Initializing
+const String Txt4  = "Angle deg -->";  // Angle value
+const String Txt5  = "Corde ";         // Chord
+const String Txt6  = "Debat mm --->";  // Throw value milimiters
+const float pi PROGMEM = M_PI;
 boolean lastStatePB_INIT = HIGH;
 boolean triggerPB_INIT = 0;
 boolean buttonStatePB_INIT = HIGH;
 boolean readingPB_INIT = HIGH;
-int maxx = -10000, minx = 10000, maxy = -10000, miny = 10000, maxz = -10000, minz = 10000;
+int action = 0;
+float corde,  ref_angle;
+long lastDebounceTimePB_INIT = 0;
 //----------------------------------------------------------------------------------------------------------------------------------
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
 //----------------------------------------------------------------------------------------------------------------------------------
