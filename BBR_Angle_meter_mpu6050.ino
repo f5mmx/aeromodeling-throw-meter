@@ -19,8 +19,8 @@
 #include <movingAvg.h>                // By J Christensen            from https://github.com/JChristensen/movingAvg
 #define DELAY_DEBOUNCE 10             // Debounce delay for Push Button
 #define DELAY_START_INIT 1000         // delay to start calibration when PB is pressed 
-RunningMedian R_Angle = RunningMedian(55);
-movingAvg ll_angle(25);
+RunningMedian R_Angle = RunningMedian(5);
+movingAvg ll_angle(10);
 //----------------------------------------------------------------------------------------------------------------------------------
 // Menu text
 const String Txt1 = "Erreur MPU";     // MPU6050 sensor didn't start error string
