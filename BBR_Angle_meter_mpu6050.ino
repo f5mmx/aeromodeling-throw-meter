@@ -19,7 +19,7 @@
 #define DELAY_DEBOUNCE 10             // Debounce delay for Push Button
 #define DELAY_START_INIT 1000         // delay to start calibration when PB is pressed 
 #define buttonPin 2                   // Push button wired on D2
-RunningMedian R_Angle = RunningMedian(5);
+RunningMedian R_Angle = RunningMedian(19);
 movingAvg ll_angle(10);
 //----------------------------------------------------------------------------------------------------------------------------------
 // Menu text
@@ -45,11 +45,13 @@ MPU6050 mma;                                      // could have been called MPU 
 float read_angle() {                             // Function returning the current rotation value along Y axis - in degrees was double
   //----------------------------------------------------------------------------------------------------------------------------------
   float l_angle = 0;
-  double lll_angle = 0;
+  //double lll_angle = 0;
+  float lll_angle = 0;
   float roll = 0;
-  int mm = 19 * 3  , mmm = 3;
+  int mm = 19  , mmm = 30;
   for (int nnn = 1;  nnn <= mmm; nnn++) {             // Average value computed over a few 100ms
-    for (int nn = 1;  nn <= mm; nn++) {               // Running median fill running median
+    R_Angle.clear();
+    for (int nn = 1;  nn <= mm; nn++) {               // Running median: fill running median
       Vector norm = mma.readNormalizeAccel();
       roll = atan2(norm.XAxis, norm.ZAxis) * 180 / pi;
       R_Angle.add(roll);                              // Add value in running median table
@@ -65,9 +67,9 @@ void init_angle() {                                // Initialize the actual angl
   //----------------------------------------------------------------------------------------------------------------------------------
   float ra = 0;
   mma.calibrateGyro();
-  mma.setThreshold(3);
+  mma.setThreshold(5);
   delay(200);
-  R_Angle.clear();
+ // R_Angle.clear();
   ll_angle.reset();
   ra = read_angle();
   ref_angle = ra;
@@ -93,7 +95,7 @@ void setup() {
     while (1);
   }
   mma.calibrateGyro();
-  mma.setThreshold(2);
+  mma.setThreshold(5);
   pinMode(buttonPin, INPUT_PULLUP);                      // define the Push Button input
   init_angle();
 }
