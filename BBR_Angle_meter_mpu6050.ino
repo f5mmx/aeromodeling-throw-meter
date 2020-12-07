@@ -16,40 +16,36 @@
 #include <MPU6050.h>                  // MPU6050 libray by Jarzebski from https://github.com/jarzebski/Arduino-MPU6050/archive/master.zip
 #include <U8g2lib.h>                  // Oled U8g2 library           from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
 #include "RunningMedian.h"            // By Ron Tillaart             from https://github.com/RobTillaart/Arduino/tree/master/libraries/RunningMedian
-#include <movingAvg.h>                // By J Christensen           from https://github.com/JChristensen/movingAvg
+#include <movingAvg.h>                // By J Christensen            from https://github.com/JChristensen/movingAvg
 #define DELAY_DEBOUNCE 10             // Debounce delay for Push Button
 #define DELAY_START_INIT 1000         // delay to start calibration when PB is pressed 
 RunningMedian R_Angle = RunningMedian(55);
 movingAvg ll_angle(25);
-const String Txt1 = "Erreur MPU";     // MPU6050 sensor didn't start error string
+//----------------------------------------------------------------------------------------------------------------------------------
 // Menu text
+const String Txt1 = "Erreur MPU";     // MPU6050 sensor didn't start error string
 const String Txt2 = "Corde : ";       // Chord
 const String Txt3 = "INIT EN COURS";  // Initializing
-// Display texts
 const String Txt4 = "Angle deg -->";  // Angle value
 const String Txt5 = "Corde ";         // Chord
 const String Txt6 = "Debat mm --->";  // Throw value milimiters
-
 int action = 0;
 bool app = false;
-double corde,  ref_angle;
+float corde,  ref_angle;
 const float pi = M_PI;
 const int buttonPin = 2;
 volatile int bp_pushed = 0;
-
 volatile  unsigned long bp_down = 0 ;
 volatile  unsigned long bp_up = 0;
 volatile  unsigned long bp_ = 0;
-
 long lastDebounceTimePB_INIT = 0;
 boolean lastStatePB_INIT = HIGH;
 boolean triggerPB_INIT = 0;
 boolean buttonStatePB_INIT = HIGH;
 boolean readingPB_INIT = HIGH;
 int maxx = -10000, minx = 10000, maxy = -10000, miny = 10000, maxz = -10000, minz = 10000;
-
+//----------------------------------------------------------------------------------------------------------------------------------
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
-
 //----------------------------------------------------------------------------------------------------------------------------------
 MPU6050 mma;                                      // could have been called MPU :D
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -57,38 +53,30 @@ float read_angle() {                             // Function returning the curre
   //----------------------------------------------------------------------------------------------------------------------------------
   float l_angle = 0;
   double lll_angle = 0;
-  //double ll_angle = 0;
   float roll = 0;
   int mm = 19 * 3  , mmm = 3;
-
   for (int nnn = 1;  nnn <= mmm; nnn++) {             // Average value computed over a few 100ms
     for (int nn = 1;  nn <= mm; nn++) {               // Running median fill running median
       Vector norm = mma.readNormalizeAccel();
       roll = atan2(norm.XAxis, norm.ZAxis) * 180 / pi;
-      R_Angle.add(roll);                           // Add value in running median table
+      R_Angle.add(roll);                              // Add value in running median table
     }
     lll_angle = ll_angle.reading(R_Angle.getMedian() * 100); //Add value in Moving average object
-    // ll_angle = ll_angle + R_Angle.getMedian();
   }
-
-  //  l_angle = round(ll_angle / mmm * 100);
-  //  ll_angle = l_angle / 100;
-  //  return ll_angle;
-
   l_angle = round(lll_angle / 10);
   lll_angle = l_angle / 10;
   return lll_angle;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
-void init_angle() {
+void init_angle() {                                // Initialize the actual angle as the reference angle
   //----------------------------------------------------------------------------------------------------------------------------------
-  double ra = 0;
+  float ra = 0;
   mma.calibrateGyro();
   mma.setThreshold(3);
   delay(200);
   R_Angle.clear();
   ll_angle.reset();
-  ra = read_angle();                              // Initialize the actual angle as the reference angle
+  ra = read_angle();
   ref_angle = ra;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -116,7 +104,6 @@ void setup() {
   pinMode(buttonPin, INPUT_PULLUP);                      // define the Push Button input
   init_angle();
 }
-
 //----------------------------------------------------------------------------------------------------------------------------------
 void lecture_bp() { // Push button read function with debouncing and long push detection
   //----------------------------------------------------------------------------------------------------------------------------------
@@ -138,12 +125,10 @@ void lecture_bp() { // Push button read function with debouncing and long push d
         }
     }
   }
-
   if (((millis() - lastDebounceTimePB_INIT) >= DELAY_START_INIT) and (buttonStatePB_INIT == HIGH))  lbp = 1;
   lastStatePB_INIT = readingPB_INIT;
   action = lbp;
 }
-
 //----------------------------------------------------------------------------------------------------------------------------------
 String cnv_flt2str(float num, int car, int digit) { // Convert a float variable into a string with a specific number of digits
   //----------------------------------------------------------------------------------------------------------------------------------
@@ -158,12 +143,11 @@ String cnv_flt2str(float num, int car, int digit) { // Convert a float variable 
   }
   return str;
 }
-
 //----------------------------------------------------------------------------------------------------------------------------------
 void aff_menu() {
   //----------------------------------------------------------------------------------------------------------------------------------
   int action = 0,  l_pas = 1;
-  double l_ang = 0, l_act = 0, l_posi = 0, l_ref = 0;
+  float l_ang = 0, l_act = 0, l_posi = 0, l_ref = 0;
   u8g2.firstPage();                                                 // Display values
   do {
     u8g2.setFontDirection(0);
@@ -190,13 +174,11 @@ void aff_menu() {
     u8g2.setCursor(64 + 63 - 14, 30);
     u8g2.print("10");
   } while ( u8g2.nextPage() );
-
   do {
     delay(10);
     lecture_bp();
   } while (triggerPB_INIT != 1);
   delay(50);
-
   l_ref = read_angle();
   do {
     l_ang = read_angle() - l_ref;                                       // read current angle
@@ -217,7 +199,6 @@ void aff_menu() {
     if (l_act != 0) {
       corde = corde + (l_act * l_pas);
     }
-
     l_posi = l_ang;
 
     if (l_posi >= 64) {
@@ -263,7 +244,6 @@ void aff_menu() {
     //   Serial.println(triggerPB_INIT);
   } while (triggerPB_INIT != 1);
   action = 0;
-
 }
 //----------------------------------------------------------------------------------------------------------------------------------
 void affiche_init() {
@@ -303,9 +283,7 @@ void loop() {                                     // Main loop
   //----------------------------------------------------------------------------------------------------------------------------------
   float x_rot = 0, aff_angle = 0, angle = 0, debat = 0;
   int act = 0;
-
   lecture_bp();
-
   switch (action) {
     case (1):
       aff_menu();
@@ -328,7 +306,6 @@ void loop() {                                     // Main loop
   } else {
     x_rot -= 180;
   }
-
   angle = (x_rot / 180) * pi;                                         // angle value converted into radian
   // Serial.println("angle :" + String(angle));
   debat = corde * sin(angle);                                         // throw computation in same units as chord
