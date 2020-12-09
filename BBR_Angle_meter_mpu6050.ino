@@ -4,17 +4,18 @@
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   
+
    --------------------------------------------------
    the MPU6050 version.
    Have fun!
    --------------------------------------------------
-   V1.0 Nov. 2020: initial release 
-     -- there are some accuracy issues in the sensor reading
-     -- the sensor reading is acceptable from 0 to +/-30°
+   V1.0 Dec. 2020: initial release
+     -- there are some accuracy issues in the sensor reading when reaching + or - 90°, error being somewhere around +/- 0.5° when the sensor is brought from horizontal to vertical position
+     -- the sensor reading is acceptable from 0 to +/-45°
      -- this doesn't look to be related to the MPU library used as the behaviour is
-     -- consistant with other libraries
+     -- consistant with other libraries I tested
      -- I've tryed some calibration procedures, with no success yet
+     -- a very positive point the sensor is repeatable
    --------------------------------------------------
 */
 #include <MPU6050.h>                  // MPU6050 libray by Jarzebski from https://github.com/jarzebski/Arduino-MPU6050/archive/master.zip
@@ -50,16 +51,15 @@ MPU6050 mma;                                      // could have been called MPU 
 float read_angle() {                             // Function returning the current rotation value along Y axis - in degrees was double
   //----------------------------------------------------------------------------------------------------------------------------------
   float l_angle = 0;
-  //double lll_angle = 0;
   float lll_angle = 0;
   float roll = 0;
-  int mm = 19  , mmm = 30;
-  for (int nnn = 1;  nnn <= mmm; nnn++) {             // Average value computed over a few 100ms
+  int mm = 19  , mmm = 20;
+  for (int nnn = 1;  nnn <= mmm; nnn++) {               // Average value computed over a few 100ms
     R_Angle.clear();
-    for (int nn = 1;  nn <= mm; nn++) {               // Running median: fill running median
-      Vector norm = mma.readNormalizeAccel();
-      roll = atan2(norm.XAxis, norm.ZAxis) * 180 / pi;
-      R_Angle.add(roll);                              // Add value in running median table
+    for (int nn = 1;  nn <= mm; nn++) {                 // Running median: fill running median
+      Vector norm = mma.readNormalizeAccel();           // Read values
+      roll =  -atan2(norm.YAxis, norm.ZAxis) * 180 / pi;// Convert to rotation
+      R_Angle.add(roll);                                // Add value in running median table
     }
     lll_angle = ll_angle.reading(R_Angle.getMedian() * 100); //Add value in Moving average object
   }
@@ -71,10 +71,7 @@ float read_angle() {                             // Function returning the curre
 void init_angle() {                                // Initialize the actual angle as the reference angle
   //----------------------------------------------------------------------------------------------------------------------------------
   float ra = 0;
-  mma.calibrateGyro();
-  mma.setThreshold(5);
   delay(200);
- // R_Angle.clear();
   ll_angle.reset();
   ra = read_angle();
   ref_angle = ra;
@@ -100,7 +97,7 @@ void setup() {
     while (1);
   }
   mma.calibrateGyro();
-  mma.setThreshold(5);
+  mma.setThreshold(1);
   pinMode(buttonPin, INPUT_PULLUP);                      // define the Push Button input
   init_angle();
 }
