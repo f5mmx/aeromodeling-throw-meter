@@ -4,12 +4,17 @@
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
+   
    --------------------------------------------------
    the MPU6050 version.
    Have fun!
    --------------------------------------------------
-   V1.0 Nov. 2020: initial release
+   V1.0 Nov. 2020: initial release 
+     -- there are some accuracy issues in the sensor reading
+     -- the sensor reading is acceptable from 0 to +/-30°
+     -- this doesn't look to be related to the MPU library used as the behaviour is
+     -- consistant with other libraries
+     -- I've tryed some calibration procedures, with no success yet
    --------------------------------------------------
 */
 #include <MPU6050.h>                  // MPU6050 libray by Jarzebski from https://github.com/jarzebski/Arduino-MPU6050/archive/master.zip
