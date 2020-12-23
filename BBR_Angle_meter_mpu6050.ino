@@ -1,134 +1,390 @@
 /*
-
    Copyright J'm f5mmx, France, 2020 (jmb91650@gmail.com)
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
-   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-   --------------------------------------------------
-   the MPU6050 version.
-   Have fun!
-   --------------------------------------------------
-   V1.0 Dec. 2020: initial release
-     -- there are some accuracy issues in the sensor reading when reaching + or - 90°, error being somewhere around +/- 0.5° when the sensor is brought from horizontal to vertical position
-     -- the sensor reading is acceptable from 0 to +/-45°
-     -- this doesn't look to be related to the MPU library used as the behaviour is
-     -- consistant with other libraries I tested
-     -- I've tryed some calibration procedures, with no success yet
-     -- a very positive point the sensor is repeatable
-   --------------------------------------------------
 */
-#include <MPU6050.h>                  // MPU6050 libray by Jarzebski from https://github.com/jarzebski/Arduino-MPU6050/archive/master.zip
-#include <U8g2lib.h>                  // Oled U8g2 library           from https://github.com/olikraus/U8g2_Arduino/archive/master.zip
-#include "RunningMedian.h"            // By Ron Tillaart             from https://github.com/RobTillaart/Arduino/tree/master/libraries/RunningMedian
-#include <movingAvg.h>                // By J Christensen            from https://github.com/JChristensen/movingAvg
-#define DELAY_DEBOUNCE 10             // Debounce delay for Push Button
-#define DELAY_START_INIT 1000         // delay to start calibration when PB is pressed 
+//   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//   This is a beerware; if you like it and if we meet some day, you can pay me a beer in return!
+//   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+/*
+   --------------------------------------------------
+   the MPU6050 version ++ HAVE FUN ++
+   --------------------------------------------------
+   V1.0 Dec. 2020: initial release, wasn't great....
+   V2.0 Dec. 2020: complete redesign using new libraries for the MPU6050 and a new large colour display
+                   highly inspired from https://github.com/adesandr/MAD_Single project
+   --------------------------------------------------
+   ARDUINO : Nano
+   DISPLAY : ST7789 240X240 IPS colour display with SPI wired with 
+                 GND > GND
+                 VCC > 3.3V
+                 SCL > D13
+                 SDA > D11
+                 RES > D8
+                 CS  > D7
+                 BLK > left unconnected
+   ACCEL   : MPU6050 6 axis Gyro and Accelerometer GY-521 wire on I2C with
+                 VCC > 5V
+                 GND > GND
+                 SLC >
+                 SDA >
+   PUSH But: Momentary switch connected between D2 and GND the button is used as follows
+        BUTTON PRESSED during boot -> start sensor calibration process. The sensor need to be placed flat 
+                                      on a horizontal table and not moved during all the calibration 
+                                      process that can take a few minutes to finalize. Calibration data are
+                                      stored into Arduino nano EEPROM so a new calibration is not needed each
+                                      time the ThrowMeter is powered OFF and ON again.
+        Normal operation after full boot or after calibration:
+        Button simple click        -> Chord value decreassed
+        Button double click        -> Chord value increased
+        Button long time pressed   -> Set current sensor position as reference angle
+ */
+#include "Wire.h"                     // I2C library
+#include <EEPROM.h>                   // EEPROM access library
+#include "I2Cdev.h"                   // I2Cdev library                from https://github.com/jrowberg 
+#include "MPU6050.h"                  // MPU6050 library               from https://github.com/jrowberg
+#include <Adafruit_GFX.h>             // Adafruit graphical library    from https://github.com/adafruit/Adafruit-GFX-Library
+#include <Arduino_ST7789_Fast.h>      // ST7789 colour display library from https://github.com/cbm80amiga/Arduino_ST7789_Fast
+#include "RREFont.h"                  // RRE Font library              from https://github.com/cbm80amiga/RREFont
+#include "rre_6x8.h"                  // RRE Font used
+#include <ButtonEvents.h>             // Button Event library          from https://github.com/fasteddy516/ButtonEvents 
+// ==> make sure to also install the Bounce2 library from https://github.com/thomasfredericks/Bounce2 as ButtonEvents is using it
+//----------------------------------------------------------------------------------------------------------------------------------
+#define DELAY_MEASURE 10              // Measure each 10ms
+#define DELAY_DISPLAY 250             // Display display each 250ms
+#define DELAY_START_INIT 2000         // delay to start calibration 
+byte varCompteur = 0;
+long t1 = 0;                          // Timer for Display management
+long t2 = 0;                          // Timer for measure
+int16_t ax, ay, az;                   // raw measure
+int16_t gx, gy, gz;
+uint8_t Accel_range;
+uint8_t Gyro_range;
+float travel = 0.0;
+float angle = 0.0, af_angle = 0.0, ref_angle = 0.0;
+//Change this 3 variables if you want to fine tune the skecth to your needs.
+int buffersize = 1000;   //Amount of readings used to average, make it higher to get more precision but calibration will be slower  (default:1000)
+int acel_deadzone = 8;   //Acelerometer error allowed, make it lower to get more precision, but sketch may not converge  (default:8)
+int giro_deadzone = 1;   //Giro error allowed, make it lower to get more precision, but sketch may not converge  (default:1)
+int mean_ax, mean_ay, mean_az, mean_gx, mean_gy, mean_gz, state = 0;
+uint16_t ax_offset, ay_offset, az_offset, gx_offset, gy_offset, gz_offset;
+//----------------------------------------------------------------------------------------------------------------------------------
+float debat = 0, debat_min = 1000, debat_max = -2000;
+float Memdebat = 100000, Memdebat_min = 3000, Memdebat_max = -2000;
+float angle_min = 200, angle_max = -200;
+float Memangle = 1, Memangle_min = 3, Memangle_max = 4;
+float corde = 68, Memcorde = 2;
+bool update_frame = true;
+
+//----------------------------------------------------------------------------------------------------------------------------------
+// Push button definition
+//----------------------------------------------------------------------------------------------------------------------------------
 #define buttonPin 2                   // Push button wired on D2
-RunningMedian R_Angle = RunningMedian(19);
-movingAvg ll_angle(10);
+ButtonEvents myButton;                // create an instance of the ButtonEvents class to attach to our button
 //----------------------------------------------------------------------------------------------------------------------------------
-// Menu text
-const String Txt1  = "Erreur MPU";     // MPU6050 sensor didn't start error string
-const String Txt2  = "Corde : ";       // Chord
-const String Txt3  = "INIT EN COURS";  // Initializing
-const String Txt4  = "Angle deg -->";  // Angle value
-const String Txt5  = "Corde ";         // Chord
-const String Txt6  = "Debat mm --->";  // Throw value milimiters
-const float pi PROGMEM = M_PI;
-boolean lastStatePB_INIT = HIGH;
-boolean triggerPB_INIT = 0;
-boolean buttonStatePB_INIT = HIGH;
-boolean readingPB_INIT = HIGH;
-int action = 0;
-float corde,  ref_angle;
-long lastDebounceTimePB_INIT = 0;
+// MPU6050 definition
 //----------------------------------------------------------------------------------------------------------------------------------
-U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, /* clock=*/ SCL, /* data=*/ SDA);   // pin remapping with ESP8266 HW I2C
+MPU6050 accelgyro;
 //----------------------------------------------------------------------------------------------------------------------------------
-MPU6050 mma;                                      // could have been called MPU :D
+// ST7789 colour TFT display definition -- using SPI bus
 //----------------------------------------------------------------------------------------------------------------------------------
-float read_angle() {                             // Function returning the current rotation value along Y axis - in degrees was double
-  //----------------------------------------------------------------------------------------------------------------------------------
-  float l_angle = 0;
-  float lll_angle = 0;
-  float roll = 0;
-  int mm = 19  , mmm = 20;
-  for (int nnn = 1;  nnn <= mmm; nnn++) {               // Average value computed over a few 100ms
-    R_Angle.clear();
-    for (int nn = 1;  nn <= mm; nn++) {                 // Running median: fill running median
-      Vector norm = mma.readNormalizeAccel();           // Read values
-      roll =  -atan2(norm.YAxis, norm.ZAxis) * 180 / pi;// Convert to rotation
-      R_Angle.add(roll);                                // Add value in running median table
-    }
-    lll_angle = ll_angle.reading(R_Angle.getMedian() * 100); //Add value in Moving average object
-  }
-  l_angle = round(lll_angle / 10);
-  lll_angle = l_angle / 10;
-  return lll_angle;
+#define TFT_DC    7                   // ST7789 display DC wired on D7
+#define TFT_RST   8                   // ST7789 display RST wired on D8
+#define SCR_WD   240                  // ST7789 width 240 pixels
+#define SCR_HT   240                  // ST7789 height 240 pixels
+Arduino_ST7789 tft = Arduino_ST7789(TFT_DC, TFT_RST); // Define TFT colour display
+//----------------------------------------------------------------------------------------------------------------------------------
+// RRE font init
+//----------------------------------------------------------------------------------------------------------------------------------
+RREFont font;
+void customRect(int x, int y, int w, int h, int c) {
+  return tft.fillRect(x, y, w, h, c);
 }
+/*******************************************************
+  //   MPU6050 measurement
+ *******************************************************/
+void manageMeasure() {
+  if (millis() - t2 > DELAY_MEASURE)
+  {
+    t2 = millis();
+    accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+    angle = 0.98 * (angle + float(gy) * 0.01 / 131) + 0.02 * atan2((double)ax, (double)az) * 180 / PI;
+    af_angle = fmod((ref_angle - angle) + 180, 360);                         // compute angle variation vs. reference angle
+    if (af_angle < 0) {
+      af_angle += 180;
+    } else {
+      af_angle -= 180;
+    }
+    //    af_angle = angle - ref_angle;
+    debat = corde * sin(af_angle * PI / 180.0);
+    debat_min = min(debat, debat_min);
+    debat_max = max(debat, debat_max);
+    angle_min = min(af_angle, angle_min);
+    angle_max = max(af_angle, angle_max);
+  }
+} /* End manageMeasure */
+
 //----------------------------------------------------------------------------------------------------------------------------------
 void init_angle() {                                // Initialize the actual angle as the reference angle
   //----------------------------------------------------------------------------------------------------------------------------------
-  float ra = 0;
-  delay(200);
-  ll_angle.reset();
-  ra = read_angle();
-  ref_angle = ra;
+  font.setBold(1); font.setScale(2);                             // Large font
+  font.setColor(RED);
+  font.printStr(ALIGN_CENTER, 100, "Zeroing sensor");
+  font.printStr(ALIGN_CENTER, 120, "don't move it");
+  font.setScale(1); font.setBold(0);
+  delay(500);
+  manageMeasure();
+  ref_angle = angle;              // set reference angle
+  delay(500);
+  manageMeasure();
+  debat_min = 200;
+  debat_max = -200;
+  angle_min = 200;
+  angle_max = -200;
+  Memcorde = 2;
+  Memangle = 200;
 }
+/*******************************************************
+     MPU6050 Initialization
+ *******************************************************/
+void Init()
+{
+  /*--- reset offsets   ---*/
+  accelgyro.setXAccelOffset(0);
+  accelgyro.setYAccelOffset(0);
+  accelgyro.setZAccelOffset(0);
+  accelgyro.setXGyroOffset(0);
+  accelgyro.setYGyroOffset(0);
+  accelgyro.setZGyroOffset(0);
+
+  meansensors();
+  delay(1000);
+
+  calibration();
+  delay(1000);
+
+  /*--- New reads and offsets display ---*/
+  meansensors();
+
+  /*--- Set offsets with the compute values ---*/
+  accelgyro.setXAccelOffset(ax_offset);
+  accelgyro.setYAccelOffset(ay_offset);
+  accelgyro.setZAccelOffset(az_offset);
+  accelgyro.setXGyroOffset(gx_offset);
+  accelgyro.setYGyroOffset(gy_offset);
+  accelgyro.setZGyroOffset(gz_offset);
+
+} /* End Init() */
+
+/*******************************************************
+   average sensors reading
+ *******************************************************/
+void meansensors() {
+  long i = 0, buff_ax = 0, buff_ay = 0, buff_az = 0, buff_gx = 0, buff_gy = 0, buff_gz = 0;
+  float zz;
+  while (i < (buffersize + 101)) {
+    // read raw accel/gyro measurements from device
+    zz = i;
+    zz =  disp_value(zz, zz + 1, 10, 0, 30, 150, true, RED, GREEN);
+
+    accelgyro.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+    if (i > 100 && i <= (buffersize + 100)) { //First 100 measures are discarded
+      buff_ax = buff_ax + ax;
+      buff_ay = buff_ay + ay;
+      buff_az = buff_az + az;
+      buff_gx = buff_gx + gx;
+      buff_gy = buff_gy + gy;
+      buff_gz = buff_gz + gz;
+    }
+    if (i == (buffersize + 100)) {
+      mean_ax = buff_ax / buffersize;
+      mean_ay = buff_ay / buffersize;
+      mean_az = buff_az / buffersize;
+      mean_gx = buff_gx / buffersize;
+      mean_gy = buff_gy / buffersize;
+      mean_gz = buff_gz / buffersize;
+    }
+    i++;
+    delay(2); //Needed so we don't get repeated measures
+  }
+} /* End meansensors() */
+/*******************************************************
+   MPU6050 calibration
+ *******************************************************/
+void calibration() {
+  float zz;
+  ax_offset = -mean_ax / 8;
+  ay_offset = -mean_ay / 8;
+  az_offset = (16384 - mean_az) / 8;
+
+  gx_offset = -mean_gx / 4;
+  gy_offset = -mean_gy / 4;
+  gz_offset = -mean_gz / 4;
+
+  while (1) {
+    int ready = 0;
+    zz = ready;
+    zz =  disp_value(zz, zz + 1, 2, 0, 100, 170, true, BLUE, GREEN);
+    accelgyro.setXAccelOffset(ax_offset);
+    accelgyro.setYAccelOffset(ay_offset);
+    accelgyro.setZAccelOffset(az_offset);
+
+    accelgyro.setXGyroOffset(gx_offset);
+    accelgyro.setYGyroOffset(gy_offset);
+    accelgyro.setZGyroOffset(gz_offset);
+
+    meansensors();
+
+    if (abs(mean_ax) <= acel_deadzone) ready++;
+    else ax_offset = ax_offset - mean_ax / acel_deadzone;
+
+    if (abs(mean_ay) <= acel_deadzone) ready++;
+    else ay_offset = ay_offset - mean_ay / acel_deadzone;
+
+    if (abs(16384 - mean_az) <= acel_deadzone) ready++;
+    else az_offset = az_offset + (16384 - mean_az) / acel_deadzone;
+
+    if (abs(mean_gx) <= giro_deadzone) ready++;
+    else gx_offset = gx_offset - mean_gx / (giro_deadzone + 1);
+
+    if (abs(mean_gy) <= giro_deadzone) ready++;
+    else gy_offset = gy_offset - mean_gy / (giro_deadzone + 1);
+
+    if (abs(mean_gz) <= giro_deadzone) ready++;
+    else gz_offset = gz_offset - mean_gz / (giro_deadzone + 1);
+
+    if (ready == 6) break;
+  }
+} /* End calibration */
+
+//----------------------------------------------------------------------------------------------------------------------------------
+void calibrate() {                                // Calibrate MPU6050
+  //----------------------------------------------------------------------------------------------------------------------------------
+  font.setBold(1); font.setScale(2);                             // Large font
+  font.setColor(RED);
+  font.printStr(ALIGN_CENTER, 100, "CALIBRATING");
+  font.printStr(ALIGN_CENTER, 120, "MPU SENSOR");
+  Init();
+  tft.fillRect(0, 100, 240, 140, GREEN);
+  eeprom_save();
+}
+//----------------------------------------------------------------------------------------------------------------------------------
+bool eeprom_read() {                              // Retrieve MPU6050 calibration data at power-up
+  //----------------------------------------------------------------------------------------------------------------------------------
+  uint16_t AX, AY, AZ;
+  uint16_t GX, GY, GZ;
+  boolean res = false;
+  font.setBold(1); font.setScale(2);                             // Large font
+  font.setColor(MAGENTA);
+  font.printStr(ALIGN_CENTER, 100, "READING");
+  font.printStr(ALIGN_CENTER, 120, "SAVED");
+  font.printStr(ALIGN_CENTER, 140, "VALUES");
+  EEPROM.get(0, AX);
+  EEPROM.get(4, AY);
+  EEPROM.get(8, AZ);
+  EEPROM.get(12, GX);
+  EEPROM.get(16, GY);
+  EEPROM.get(20, GZ);
+  res = isnan(AX) or isnan(AY) or isnan(AZ);         // check if valid data
+  res = res or isnan(GX) or isnan(GY) or isnan(GZ);  // check if valid data
+  if (res) {                                            // IF no valid data in EEPROM
+    font.setBold(2); font.setScale(3);
+    font.setColor(RED);
+    font.printStr(ALIGN_CENTER, 180, "ERROR");
+    delay(2000);
+  }
+  else {
+    ax_offset = AX;
+    ay_offset = AY;
+    az_offset = AZ;
+    gx_offset = GX;
+    gy_offset = GY;
+    gz_offset = GZ;
+    accelgyro.setXAccelOffset(ax_offset);
+    accelgyro.setYAccelOffset(ay_offset);
+    accelgyro.setZAccelOffset(az_offset);
+    accelgyro.setXGyroOffset(gx_offset);
+    accelgyro.setYGyroOffset(gy_offset);
+    accelgyro.setZGyroOffset(gz_offset);
+  }
+  tft.fillRect(0, 100, 240, 140, GREEN);
+  return (!res);                                        // IF no valid data in EEPROM return read failed
+}
+//----------------------------------------------------------------------------------------------------------------------------------
+void eeprom_save() {                              // Save MPU6050 calibration data at power-up
+  //----------------------------------------------------------------------------------------------------------------------------------
+  font.setBold(1); font.setScale(2);                             // Large font
+  font.setColor(RED);
+  font.printStr(ALIGN_CENTER, 100, "SAVING");
+  font.printStr(ALIGN_CENTER, 120, "CALIBRATION");
+  font.printStr(ALIGN_CENTER, 140, "VALUES");
+  EEPROM.put(0, ax_offset);
+  EEPROM.put(4, ay_offset);
+  EEPROM.put(8, az_offset);
+  EEPROM.put(12, gx_offset);
+  EEPROM.put(16, gy_offset);
+  EEPROM.put(20, gz_offset);
+  tft.fillRect(0, 100, 240, 140, GREEN);
+}
+//----------------------------------------------------------------------------------------------------------------------------------
+// Display initialization
+//----------------------------------------------------------------------------------------------------------------------------------
+void setup_display() {
+  Wire.begin();                                  // Start SPI
+  tft.begin();                                   // TFT display Start
+  font.init(customRect, SCR_WD, SCR_HT);         // custom fillRect function and screen width and height values
+  font.setFont(&rre_6x8); font.setSpacing(1);   // Define font used
+}
+//----------------------------------------------------------------------------------------------------------------------------------
+// MPU initialization
+//----------------------------------------------------------------------------------------------------------------------------------
+void setup_MPU() {
+  accelgyro.initialize();                        // initialize MPU device
+  if (!accelgyro.testConnection()) {             // if MPU fails to connect then display error message
+    font.setSpacing(1);
+    font.setScale(2);
+    font.setBold(1);
+    font.setColor(RED);
+    font.printStr(ALIGN_CENTER, 75 + font.getHeight() * 4, "MPU Error");
+    font.printStr(ALIGN_CENTER, 60 + font.getHeight() * 8, "Programm stopped");
+    while (1);                                   // Freeze program here
+  }
+}
+//----------------------------------------------------------------------------------------------------------------------------------
+// Button initialization
+//----------------------------------------------------------------------------------------------------------------------------------
+void setup_Button() {
+  myButton.attach(buttonPin);                    // attach ButtonEvents instance to the button pin
+  myButton.activeLow();                          // button is active when grounded
+  myButton.debounceTime(15);                     // apply 15ms debounce time on button                                   --> decrease chord value
+  myButton.doubleTapTime(300);                   // set double-tap detection window to 250ms                             --> increase chord value
+  myButton.holdTime(2000);                       // require button to be held for 2000ms before triggering a hold event  --> set actual angle as reference angle
+}
+//----------------------------------------------------------------------------------------------------------------------------------
+// Application and components setup
 //----------------------------------------------------------------------------------------------------------------------------------
 void setup() {
-  //----------------------------------------------------------------------------------------------------------------------------------
-  delay(300);
-  ll_angle.begin();
-  corde = 68;                                     // Chord width value
-  Serial.begin(9600);
-  //  Serial.println("Init done");
-  u8g2.begin(); // Start Oled
-  delay(200);
-  if (! mma.begin(MPU6050_SCALE_2000DPS, MPU6050_RANGE_2G, 0x68)) {   // Try to start MMA, if fails then display error message
-    u8g2.firstPage();
-    do {
-      u8g2.setFontDirection(0);
-      u8g2.setFont(u8g2_font_t0_14_tf);
-      u8g2.setCursor(18, 15);
-      u8g2.print(Txt1);
-    } while ( u8g2.nextPage() );
-    while (1);
-  }
-  mma.calibrateGyro();
-  mma.setThreshold(1);
-  pinMode(buttonPin, INPUT_PULLUP);                      // define the Push Button input
-  init_angle();
-}
-//----------------------------------------------------------------------------------------------------------------------------------
-void lecture_bp() { // Push button read function with debouncing and long push detection
-  //----------------------------------------------------------------------------------------------------------------------------------
-  int  lbp = 0;
-  readingPB_INIT = !digitalRead(buttonPin);
-  triggerPB_INIT = 0;
-  if (readingPB_INIT != lastStatePB_INIT) lastDebounceTimePB_INIT = millis();
-  if ((millis() - lastDebounceTimePB_INIT) > DELAY_DEBOUNCE)
-  {
-    if (readingPB_INIT != buttonStatePB_INIT)
-    {
-      buttonStatePB_INIT = readingPB_INIT;
-      if (buttonStatePB_INIT == LOW)
+  Serial.begin(9600);                            // Start serial for debug message display
+  setup_display();                               // Initialize display
+  affiche_init();                                // Display initialization information
+  setup_MPU();                                   // Initialize MPU
 
-        if ((millis() - lastDebounceTimePB_INIT) < DELAY_START_INIT)
-        {
-          lbp = 2;
-          triggerPB_INIT = 1;
-        }
-    }
+  pinMode(buttonPin, INPUT_PULLUP);              // define the Push Button input
+
+  if (!digitalRead(buttonPin)) {                 // If button pressed during power-up
+    calibrate();
+  }                              // Calibrate sensor
+  else {                                         // if button not pressed
+    if (!eeprom_read()) calibrate();             // read data from eeprom, if no valide data calibrate
   }
-  if (((millis() - lastDebounceTimePB_INIT) >= DELAY_START_INIT) and (buttonStatePB_INIT == HIGH))  lbp = 1;
-  lastStatePB_INIT = readingPB_INIT;
-  action = lbp;
+  init_angle();                                  // Set actual angle as reference angle
+  setup_Button();                                // Initialize push button behavior
+  update_frame = true;                           // Authorize full frame draw
 }
-//----------------------------------------------------------------------------------------------------------------------------------
-String cnv_flt2str(float num, int car, int digit) { // Convert a float variable into a string with a specific number of digits
-  //----------------------------------------------------------------------------------------------------------------------------------
+
+/*----------------------------------------------------------------------------------------------------------------------------------
+  // Convert a float variable into a string with a specific number of digits
+  //----------------------------------------------------------------------------------------------------------------------------------*/
+String cnv_flt2str(float num, int car, int digit) {
   String str = "";
   if (digit > 0) {
     str = String(num, digit);
@@ -140,171 +396,151 @@ String cnv_flt2str(float num, int car, int digit) { // Convert a float variable 
   }
   return str;
 }
-//----------------------------------------------------------------------------------------------------------------------------------
-void aff_menu() {
-  //----------------------------------------------------------------------------------------------------------------------------------
-  int action = 0,  l_pas = 1;
-  float l_ang = 0, l_act = 0, l_posi = 0, l_ref = 0;
-  u8g2.firstPage();                                                 // Display values
-  do {
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_t0_14_tf);
-    u8g2.setCursor(18, 15);
-    u8g2.print(Txt2 + cnv_flt2str(corde, 4, 1) + "mm");
-    u8g2.drawBox(64 - 7, 22, 14, 10);
-    u8g2.drawFrame(64 - 20, 22, 40, 10);
-    u8g2.drawFrame(64 - 45, 22, 90, 10);
-    u8g2.drawFrame(0, 22, 128, 10);
-    u8g2.setFont(u8g2_font_micro_tr);
-    u8g2.setCursor(64 - 1, 30);
-    u8g2.print("0");
-    u8g2.setCursor(64 - 19, 30);
-    u8g2.print("-.1");
-    u8g2.setCursor(64 - 45 + 12, 30);
-    u8g2.print("-1");
-    u8g2.setCursor(64 - 63 + 5, 30);
-    u8g2.print("-10");
-    u8g2.setCursor(64 + 19 - 9, 30);
-    u8g2.print(".1");
-    u8g2.setCursor(64 + 45 - 14, 30);
-    u8g2.print("1");
-    u8g2.setCursor(64 + 63 - 14, 30);
-    u8g2.print("10");
-  } while ( u8g2.nextPage() );
-  do {
-    delay(10);
-    lecture_bp();
-  } while (triggerPB_INIT != 1);
-  delay(50);
-  l_ref = read_angle();
-  do {
-    l_ang = read_angle() - l_ref;                                       // read current angle
-    if (abs(l_ang) >= 7) {                                              // If angle over 7 degrees
-      if (abs(l_ang) < 20) {
-        l_act = 0.1;
-      }
-      else {
-        if (abs(l_ang) < 45) l_act = 1;
-        else {
-          l_act = 10;
-        }
-      }
-      if (l_ang > 0) l_pas = 1; else l_pas = -1;
-    }
-    else l_act = 0;
-    //  Serial.println("angle :" + String(abs(ang)) + " act " + String(act));
-    if (l_act != 0) {
-      corde = corde + (l_act * l_pas);
-    }
-    l_posi = l_ang;
-
-    if (l_posi >= 64) {
-      l_posi = 64;
-    }
-    else {
-      if (l_posi < -64) {
-        l_posi = -64;
-      }
-    }
-    l_pas = 64 + l_posi;
-    u8g2.firstPage();                                                 // Display values
-    do {
-      u8g2.setFontDirection(0);
-      u8g2.setFont(u8g2_font_t0_14_tf);
-      u8g2.setCursor(18, 15);
-      u8g2.print(Txt2 + cnv_flt2str(corde, 4, 1) + "mm");
-      u8g2.drawBox(64 - 7, 22, 14, 10);
-      u8g2.drawFrame(64 - 20, 22, 40, 10);
-      u8g2.drawFrame(64 - 45, 22, 90, 10);
-      u8g2.drawFrame(0, 22, 128, 10);
-      u8g2.setFont(u8g2_font_micro_tr);
-      u8g2.setCursor(64 - 1, 30);
-      u8g2.print("0");
-      u8g2.setCursor(64 - 19, 30);
-      u8g2.print("-.1");
-      u8g2.setCursor(64 - 45 + 12, 30);
-      u8g2.print("-1");
-      u8g2.setCursor(64 - 63 + 5, 30);
-      u8g2.print("-10");
-      u8g2.setCursor(64 + 19 - 9, 30);
-      u8g2.print(".1");
-      u8g2.setCursor(64 + 45 - 14, 30);
-      u8g2.print("1");
-      u8g2.setCursor(64 + 63 - 14, 30);
-      u8g2.print("10");
-      u8g2.drawLine(l_pas, 18, l_pas, 34);
-      u8g2.drawLine(l_pas - 1, 18, l_pas - 1, 20);
-      u8g2.drawLine(l_pas + 1, 18, l_pas + 1, 20);
-    } while ( u8g2.nextPage() );
-    delay(20);
-    lecture_bp();
-    //   Serial.println(triggerPB_INIT);
-  } while (triggerPB_INIT != 1);
-  action = 0;
-}
-//----------------------------------------------------------------------------------------------------------------------------------
+/*----------------------------------------------------------------------------------------------------------------------------------
+   Display initialization message
+    ---------------------------------------------------------------------------------------------------------------------------------*/
 void affiche_init() {
-  //----------------------------------------------------------------------------------------------------------------------------------
-  u8g2.firstPage();                                                 // Display values
-  do {
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_t0_14_tf);
-    u8g2.setCursor(18, 24);
-    u8g2.print(Txt3);
-  } while ( u8g2.nextPage() );
+  tft.fillScreen(GREEN);                          // TFT clear display with GREY backgound
+  font.setBold(0);
+  font.setScale(3);                              // Large font
+  font.setColor(BLACK, GREEN);
+  font.printStr(ALIGN_CENTER, 60, "Initializing");
+}
+/*----------------------------------------------------------------------------------------------------------------------------------
+   Function displaying values on main menu if the new value is different of the memorized value
+   this was needed as the value would have been lightly blinking when unchanged overwritten
+   return the value displayed
+  ----------------------------------------------------------------------------------------------------------------------------------*/
+float disp_value(float val, float memval, int nbChar, int nbDec, int col, int line, bool update_fr, uint16_t fwdColor, uint16_t bckColor) {
+  char buf[100];
+  String txt;
+  if ((cnv_flt2str(val, nbChar, nbDec) != cnv_flt2str(memval, nbChar, nbDec)) or update_fr) {
+    memval = val;
+    txt = cnv_flt2str(val, nbChar, nbDec) + "  ";
+    txt.toCharArray(buf, txt.length() + 1);
+    font.setColor(fwdColor, bckColor);
+    font.printStr(col, line, buf);
+  }
+  return memval;
 }
 //----------------------------------------------------------------------------------------------------------------------------------
-void affiche(String l_angle, String l_corde, String l_debat) {
-  //----------------------------------------------------------------------------------------------------------------------------------
-  u8g2.firstPage();                                                 // Display values
-  do {
-    u8g2.setFontDirection(0);
-    u8g2.setFont(u8g2_font_t0_11_tf);
-    u8g2.setCursor(1, 10);
-    u8g2.print(Txt4);
-    u8g2.setFont(u8g2_font_crox4tb_tn);
-    u8g2.setCursor(78, 15);
-    u8g2.print(l_angle);
-    u8g2.setFont(u8g2_font_t0_11_tf);
-    u8g2.setCursor(1, 21);
-    u8g2.print(Txt5 + l_corde + "mm");
-    u8g2.setCursor(1, 31);
-    u8g2.print(Txt6);
-    u8g2.setFont(u8g2_font_crox4tb_tn);
-    u8g2.setCursor(78, 32);
-    u8g2.print(l_debat);
-  } while ( u8g2.nextPage() );
-}
+// Main page display
 //----------------------------------------------------------------------------------------------------------------------------------
-void loop() {                                     // Main loop
-  //----------------------------------------------------------------------------------------------------------------------------------
-  float x_rot = 0, aff_angle = 0, angle = 0, debat = 0;
-  int act = 0;
-  lecture_bp();
-  switch (action) {
-    case (1):
-      aff_menu();
-      affiche_init();
-      init_angle();
-      action = 2;
-      break;
-    case (2):
-      affiche_init();
-      init_angle();
-      action = 0;
-      break;
-    default:
-      break;
+void affiche() {
+  int h = 20, StCol = 5, DspCol = 120;
+  if ((millis() - t1) > DELAY_DISPLAY) {                     // If update display authorized
+    t1 = millis();
+    if (update_frame) {                                      // frame text display authorized
+      tft.fillScreen(BLACK);                                 // TFT clear display with BLACK backgound
+      tft.drawRect(0, 28, 240, 62, RED);
+      tft.drawRect(0, 99+26, 240, 62, RED);
+      tft.drawRect(0, 199, 240, 26, RED);
+      font.setBold(1);
+      font.setScale(3);
+      font.setColor(GREEN);
+      font.printStr(ALIGN_CENTER, 3, "ANGLE");
+      font.setBold(0);
+      font.setScale(2);
+      font.setColor(CYAN);
+      font.printStr(StCol, 2+1.5 * h, "Min");
+      font.printStr(StCol, 2+3.5 * h, "Max");
+      font.setColor(YELLOW);
+      //font.setBold(1);
+      font.printStr(StCol, 2+2.5 * h , "Current");
+      font.setBold(1);
+      font.setScale(3);
+      font.setColor(GREEN);
+      font.printStr(ALIGN_CENTER, 2 + 5 * h-2, "THROW");
+      font.setBold(0);
+      font.setScale(2);
+      font.setColor(CYAN);
+      font.printStr(StCol, 5 * h + 1.5 * h, "Min");
+      font.printStr(StCol, 5 * h + 3.5 * h, "Max");
+      font.setColor(YELLOW);
+      //font.setBold(1);
+      font.printStr(StCol, 5 * h + 2.5 * h , "Current");
+
+      font.setColor(YELLOW, BLACK);
+      //font.setBold(2);
+      font.printStr(StCol, 5 * h + 5.2 * h, "Chord");
+      update_frame = false;                                 // Frame updated no need to update it again
+    }
+    /* Display all values if different from last display */
+    /* <<<<<<<<<<<<< A N G L E   values >>>>>>>>>>>>>>>>>>>>>>>    */
+    font.setBold(0);
+    font.setScale(2);
+    Memangle_min =  disp_value(angle_min, Memangle_min, 7, 1, DspCol, 2+1.5 * h, update_frame, CYAN, BLACK);
+    Memangle_max =  disp_value(angle_max, Memangle_max, 7, 1, DspCol, 2+3.5 * h, update_frame, CYAN, BLACK);
+    Memangle = disp_value(af_angle, Memangle, 7, 1, DspCol, 2+2.5 * h, update_frame, YELLOW, BLACK);
+    /* <<<<<<<<<<<<< T H R O W   values >>>>>>>>>>>>>>>>>>>>>>>    */
+    Memdebat_min =  disp_value(debat_min, Memdebat_min, 7, 1, DspCol, 5 * h + 1.5 * h, update_frame, CYAN, BLACK);
+    Memdebat_max =  disp_value(debat_max, Memdebat_max, 7, 1, DspCol, 5 * h + 3.5 * h, update_frame, CYAN, BLACK);
+    Memdebat = disp_value(debat, Memdebat, 7, 1, DspCol, 5 * h + 2.5 * h, update_frame, YELLOW, BLACK);
+    /* <<<<<<<<<<<<< C H O R D   values >>>>>>>>>>>>>>>>>>>>>>>    */
+    Memcorde = disp_value(corde, Memcorde, 6, 0, DspCol, 5 * h + 5.2 * h, update_frame, YELLOW, BLACK);
+
   }
-  x_rot = read_angle();                                                 // read current angle
-  x_rot = fmod((ref_angle - x_rot) + 180, 360);                         // compute angle variation vs. reference angle
-  if (x_rot < 0) {
-    x_rot += 180;
-  } else {
-    x_rot -= 180;
+}
+/*---------------------------------------------------------------------------------------------------------------------------------
+    Button read and actions state:
+    0 --> nothing happened
+    1 --> Single click
+    2 --> Double click
+    3 --> Long time pressed
+  //---------------------------------------------------------------------------------------------------------------------------------*/
+uint8_t Read_button() {
+  uint8_t btn = 0;
+  myButton.update();
+  // things to do if the button was tapped (single tap)
+  if (myButton.tapped() == true) {
+    btn = 1;
   }
-  angle = (x_rot / 180) * pi;                                         // angle value converted into radian
-  // Serial.println("angle :" + String(angle));
-  debat = corde * sin(angle);                                         // throw computation in same units as chord
-  affiche(cnv_flt2str(x_rot, 6, 1), cnv_flt2str(corde, 4, 1), cnv_flt2str(debat, 6, 1));
+  // things to do if the button was double-tapped
+  if (myButton.doubleTapped() == true) {
+    btn = 2;
+  }
+  // things to do if the button was holded
+  if (myButton.held() == true) {
+    btn = 3;
+  }
+  return btn;
+}
+/* ---------------------------------------------------------------------------------------------------------------------------------
+   Manage the button pressed events
+     Single Click -> decrease Chord value
+     Double Click -> increase Chord value
+     Long press   -> Set reference angle
+*/
+void manageButton() {
+  switch (Read_button()) {
+    case (0): {                       // <<<<<<<<<<<<<<< button not pressed
+        break;
+      }
+    case (1): {                       // <<<<<<<<<<<<<<< button single click -> decrease Chord value
+        if (corde > 11)  {
+          corde--;
+        }
+        break;
+      }
+    case (2): {                       // <<<<<<<<<<<<<<< button bouble click -> increase Chord value
+        if (corde < 149) {
+          corde++;
+        }
+        break;
+      }
+    case (3): {                       // <<<<<<<<<<<<<<< long button press -> Set reference angle
+        affiche_init();               // display initialisation page
+        init_angle();                 // reference angle = current angle
+        update_frame = true;
+        break;
+      }
+  }
+}
+/*----------------------------------------------------------------------------------------------------------------------------------
+   Main Program loop
+  ----------------------------------------------------------------------------------------------------------------------------------*/
+void loop() {
+  manageButton();           // Read button action and react as needed
+  manageMeasure();          // Measure current angle values and do all math
+  affiche();                // Display values and if needed display frame
 }
